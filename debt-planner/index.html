@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Free Debt Payoff Calculator: Snowball or Avalanche | Porchlight Ledger</title>
+<meta name="description" content="Add your debts, pick Snowball or Avalanche, and see an estimated debt-free date, interest saved and the month each debt is paid off. Runs in your browser; nothing is stored or sent.">
+<meta name="theme-color" content="#1F4E4A">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Porchlight Ledger">
+<meta property="og:title" content="Free Debt Payoff Calculator | Porchlight Ledger">
+<meta property="og:description" content="See an estimated debt-free date with the Snowball or Avalanche method. Runs in your browser; nothing is stored or sent.">
+<meta property="og:image" content="https://porchlightledger.com/img/og-image.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="../fonts/dm-serif-display.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="planner.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap nav">
+    <a class="brand" href="../" aria-label="Porchlight Ledger home"><img src="../favicon.svg" alt="" width="32" height="32"> Porchlight Ledger</a>
+    <nav aria-label="Main">
+      <a href="../#shop">Shop</a>
+      <a href="../#faq">FAQ</a>
+      <a class="btn btn-small" href="https://www.etsy.com/shop/PorchlightLedger" target="_blank" rel="noopener">Shop the planners</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="dp-hero">
+  <div class="wrap narrow">
+    <p class="eyebrow">Free calculator</p>
+    <h1>Debt Payoff Calculator</h1>
+    <p class="lead">Add your debts, choose Snowball or Avalanche, and see an estimated debt-free date and the month each debt is paid off.</p>
+    <p class="muted dp-privacy">Everything runs in your browser. Nothing you type is stored or sent anywhere.</p>
+  </div>
+</section>
+
+<section class="dp-tool">
+  <div class="wrap narrow">
+    <form id="dp-form" novalidate>
+      <fieldset class="dp-card">
+        <legend><h2>Your debts</h2></legend>
+        <p class="muted dp-help">Use the current balance, the APR from your statement, and the minimum monthly payment.</p>
+        <div id="dp-errors" class="dp-errors" role="alert" tabindex="-1" hidden></div>
+        <div id="dp-rows"></div>
+        <div class="dp-row-actions">
+          <button type="button" class="btn btn-ghost btn-small" id="dp-add">+ Add a debt</button>
+          <button type="button" class="btn btn-ghost btn-small" id="dp-example">Fill in an example</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="dp-card">
+        <legend><h2>Your plan</h2></legend>
+        <div class="dp-field dp-extra">
+          <label for="dp-extra">Extra each month, on top of your minimums (optional)</label>
+          <div class="dp-money"><span aria-hidden="true">$</span><input id="dp-extra" name="extra" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></div>
+          <p class="dp-err" id="dp-extra-err" hidden></p>
+        </div>
+        <div class="dp-methods" role="radiogroup" aria-labelledby="dp-method-label">
+          <p id="dp-method-label" class="dp-label">Payoff order</p>
+          <label class="dp-method"><input type="radio" name="method" value="snowball" checked> <span><strong>Snowball</strong><br>Smallest balance first. Small debts are gone sooner.</span></label>
+          <label class="dp-method"><input type="radio" name="method" value="avalanche"> <span><strong>Avalanche</strong><br>Highest APR first. Usually the least interest.</span></label>
+        </div>
+        <button type="submit" class="btn btn-big dp-submit">Show my payoff plan</button>
+      </fieldset>
+    </form>
+
+    <div id="dp-results" class="dp-results" aria-live="polite" tabindex="-1"></div>
+    <p class="fine-print">This is an educational estimate, not financial advice. It assumes a fixed APR, interest added monthly, no new charges and the same total payment every month. Your lender's numbers may differ.</p>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap narrow center">
+    <h2>Want the full plan in a spreadsheet?</h2>
+    <p class="lead">Our planners turn this into a month-by-month schedule you can update as you go, in Google Sheets or Excel.</p>
+    <div class="cta-row dp-cta">
+      <a class="btn btn-big" href="https://www.etsy.com/shop/PorchlightLedger" target="_blank" rel="noopener">Shop the planners</a>
+      <a class="btn btn-ghost btn-big" href="https://porchlight-ledger.kit.com/16208810d1" target="_blank" rel="noopener">Get the free worksheet</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap foot-grid">
+    <div>
+      <p class="brand"><img src="../favicon.svg" alt="" width="28" height="28"> Porchlight Ledger</p>
+      <p class="muted-light">Simple tools for household money.</p>
+    </div>
+    <div>
+      <p class="foot-h">Contact</p>
+      <p><a href="mailto:hello@porchlightledger.com">hello@porchlightledger.com</a></p>
+    </div>
+    <div>
+      <p class="foot-h">Follow</p>
+      <ul class="social">
+        <li><a href="https://www.instagram.com/porchlightledger/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" class="fill"/></svg></a></li>
+        <li><a href="https://www.tiktok.com/@joshuawildman4" target="_blank" rel="noopener" aria-label="TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.5 2.8 2.4 4.5 5 4.7"/></svg></a></li>
+        <li><a href="https://x.com/JoshuaWildman7" target="_blank" rel="noopener" aria-label="X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 16M20 4L4 20"/></svg></a></li>
+        <li><a href="https://www.etsy.com/shop/PorchlightLedger" target="_blank" rel="noopener" aria-label="Etsy shop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg></a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="wrap foot-bottom">
+    <p>© 2026 Porchlight Ledger · <a href="../privacy.html">Privacy</a> · Etsy is a trademark of Etsy, Inc. This site is not affiliated with Etsy. Planners are for organizing and are not financial advice.</p>
+  </div>
+</footer>
+<script src="payoff.js"></script>
+<script src="planner.js"></script>
+</body>
+</html>
