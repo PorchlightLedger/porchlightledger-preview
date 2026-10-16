@@ -200,7 +200,7 @@
     return '<nav class="seg no-print" aria-label="Dashboard version">' + item("a", "Debt numbers") + item("b", "Big picture") + "</nav>";
   }
   function tile(label, valueHTML, cls, sub) {
-    return '<div class="tile ' + (cls || "") + '"><dt>' + label + '</dt><dd>' + valueHTML + '</dd>' + (sub ? '<div class="tile-sub">' + sub + "</div>" : "") + "</div>";
+    return '<div class="tile ' + (cls || "") + '"><dt>' + label + '</dt><dd><span class="tile-val">' + valueHTML + '</span>' + (sub ? '<span class="tile-sub">' + sub + "</span>" : "") + "</dd></div>";
   }
   function legendHTML(items) {
     return '<div class="legend">' + items.map(function (x) { return '<span><i class="sw" style="background:' + x[1] + '"></i>' + esc(x[0]) + "</span>"; }).join("") + "</div>";
