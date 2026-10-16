@@ -115,6 +115,8 @@ table.cmp td.amt,table.cmp th.amt{text-align:right}
 .legend i{display:inline-block;width:22px;height:0;border-top:4px solid var(--teal-m);vertical-align:middle;margin-right:6px}
 .legend i.dash{border-top:3px dashed var(--terra-text)}
 /* dashboards */
+#dash{min-height:80vh}
+#debts,#plan,#more{min-height:60vh}
 .seg{display:flex;background:var(--tint);border-radius:999px;padding:4px;margin:0 0 16px;gap:4px}
 .seg a{flex:1;display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:999px;color:var(--teal);font-weight:600;text-decoration:none;text-align:center;padding:4px 8px;line-height:1.15}
 .seg a[aria-current=true]{background:var(--teal);color:#fff}
