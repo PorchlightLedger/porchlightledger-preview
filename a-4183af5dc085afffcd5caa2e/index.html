@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Porchlight Ledger Debt Planner</title>
+<meta name="description" content="A private debt payoff planner that works offline. Your numbers stay on this device.">
+<meta name="theme-color" content="#1F4E4A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<link rel="preload" href="fonts/dm-serif-display.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/source-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="app-header">
+  <div class="wrap">
+    <p class="brand"><img src="icons/favicon.svg" alt="" width="30" height="30"><span>Porchlight Ledger<br><span class="sub small muted" style="font-family:'Source Sans Pro',system-ui,sans-serif">Debt Planner</span></span></p>
+    <p id="saved-pill" class="saved-pill" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span id="saved-pill-text">Saved on this device only</span></p>
+  </div>
+</header>
+
+<main id="main">
+  <noscript><div class="wrap"><p class="notice">This app needs JavaScript. Nothing is sent anywhere.</p></div></noscript>
+
+  <section id="view-home" class="view" tabindex="-1" aria-labelledby="h-home">
+    <div class="wrap">
+      <h2 id="h-home" class="sr">Home</h2>
+      <div id="home"></div>
+    </div>
+  </section>
+
+  <section id="view-debts" class="view" tabindex="-1" aria-labelledby="h-debts" hidden>
+    <div class="wrap">
+      <h2 id="h-debts">Your debts</h2>
+      <div id="debts"></div>
+    </div>
+  </section>
+
+  <section id="view-plan" class="view" tabindex="-1" aria-labelledby="h-plan" hidden>
+    <div class="wrap">
+      <div class="print-only"><h1>Porchlight Ledger Debt Plan</h1><p id="print-date"></p></div>
+      <h2 id="h-plan">Your plan</h2>
+      <div id="plan"></div>
+    </div>
+  </section>
+
+  <section id="view-more" class="view" tabindex="-1" aria-labelledby="h-more" hidden>
+    <div class="wrap">
+      <h2 id="h-more">More</h2>
+      <div id="more"></div>
+    </div>
+  </section>
+
+  <div class="wrap foot">
+    <p class="disclaimer">Educational tool, not financial advice.</p>
+    <p>Estimates only. Your lender's statement is the final word. All data stays on this device.</p>
+    <p class="print-only">Printed from Porchlight Ledger Debt Planner. Your numbers were not sent anywhere.</p>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="Sections">
+  <ul>
+    <li><a href="#home" data-tab="home"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</a></li>
+    <li><a href="#debts" data-tab="debts"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Debts</a></li>
+    <li><a href="#plan" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M7 15l4-5 3 3 5-7"/></svg>Plan</a></li>
+    <li><a href="#more" data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>More</a></li>
+  </ul>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden><span id="toast-text"></span><button type="button" id="toast-undo" hidden>Undo</button></div>
+
+<!-- Add or edit a debt -->
+<dialog id="dlg-debt" aria-labelledby="dlg-debt-title">
+  <form id="form-debt" novalidate>
+    <h2 id="dlg-debt-title">Add a debt</h2>
+    <p class="muted small">Use the numbers on your latest statement. Close is fine, you can fix it later.</p>
+    <div class="field"><label for="f-name">Name</label><div class="input"><input id="f-name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Credit card" aria-describedby="f-name-err"></div><p class="err" id="f-name-err" hidden></p></div>
+    <div class="field"><label for="f-balance">Balance</label><div class="input"><span aria-hidden="true">$</span><input id="f-balance" type="text" inputmode="decimal" autocomplete="off" aria-describedby="f-balance-err"></div><p class="err" id="f-balance-err" hidden></p></div>
+    <div class="two">
+      <div class="field"><label for="f-apr">APR</label><div class="input"><input id="f-apr" type="text" inputmode="decimal" autocomplete="off" aria-describedby="f-apr-hint f-apr-err"><span aria-hidden="true">%</span></div><p class="hint" id="f-apr-hint">The yearly interest rate on your statement.</p><p class="err" id="f-apr-err" hidden></p></div>
+      <div class="field"><label for="f-min">Minimum payment</label><div class="input"><span aria-hidden="true">$</span><input id="f-min" type="text" inputmode="decimal" autocomplete="off" aria-describedby="f-min-err"></div><p class="err" id="f-min-err" hidden></p></div>
+    </div>
+    <label class="check"><input id="f-excluded" type="checkbox"><span>Leave this debt out of the payoff plan. Good for something like a 0% loan you will just pay the minimum on.</span></label>
+    <div class="dlg-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn" id="f-save">Save debt</button></div>
+  </form>
+</dialog>
+
+<!-- Log a payment / update balance -->
+<dialog id="dlg-log" aria-labelledby="dlg-log-title">
+  <form id="form-log" novalidate>
+    <h2 id="dlg-log-title">Log a payment</h2>
+    <p class="muted small">Short this month? That is okay. Log what you could pay and the plan updates.</p>
+    <div class="field"><label for="l-debt">Debt</label><div class="input"><select id="l-debt"></select></div></div>
+    <fieldset>
+      <legend>What do you want to record?</legend>
+      <label class="choice"><input type="radio" name="l-mode" value="payment" checked><span><strong>I made a payment</strong><br><span class="small muted">Enter the amount. It comes off the balance.</span></span></label>
+      <label class="choice"><input type="radio" name="l-mode" value="balance"><span><strong>Update the balance</strong><br><span class="small muted">Enter what the statement says you owe now.</span></span></label>
+    </fieldset>
+    <div class="two">
+      <div class="field"><label for="l-value" id="l-value-label">Payment amount</label><div class="input"><span aria-hidden="true">$</span><input id="l-value" type="text" inputmode="decimal" autocomplete="off" aria-describedby="l-value-err"></div><p class="err" id="l-value-err" hidden></p></div>
+      <div class="field"><label for="l-date">Date</label><div class="input"><input id="l-date" type="date" aria-describedby="l-date-err"></div><p class="err" id="l-date-err" hidden></p></div>
+    </div>
+    <p class="hint" id="l-current"></p>
+    <div class="dlg-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-warm">Save</button></div>
+  </form>
+</dialog>
+
+<!-- Confirm -->
+<dialog id="dlg-confirm" aria-labelledby="dlg-confirm-title">
+  <div class="dlg-body">
+    <h2 id="dlg-confirm-title">Are you sure?</h2>
+    <p id="dlg-confirm-text"></p>
+    <div class="dlg-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="button" class="btn btn-warm" id="dlg-confirm-ok">OK</button></div>
+  </div>
+</dialog>
+
+<!-- First run -->
+<div id="onboarding" class="onb" role="dialog" aria-modal="true" aria-labelledby="onb-title" hidden>
+  <div class="wrap" id="onb-body"></div>
+</div>
+
+<input type="file" id="file-import" accept=".json,.csv,application/json,text/csv" hidden tabindex="-1">
+
+<script src="payoff.js"></script>
+<script src="progress.js"></script>
+<script src="store.js"></script>
+<script src="plan.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

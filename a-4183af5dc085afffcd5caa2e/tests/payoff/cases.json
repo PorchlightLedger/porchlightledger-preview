@@ -1,0 +1,9 @@
+{
+ "a": {"debts":[{"name":"Loan","balance":1000,"apr":0,"minPayment":100}],"extra":0,"method":"snowball"},
+ "b": {"debts":[{"name":"Card","balance":5000,"apr":18,"minPayment":150}],"extra":0,"method":"snowball"},
+ "c": {"debts":[{"name":"Store card","balance":800,"apr":12,"minPayment":30},
+                {"name":"Credit card","balance":4500,"apr":24,"minPayment":110},
+                {"name":"Car loan","balance":9000,"apr":6,"minPayment":250}],"extra":200},
+ "d": {"debts":[{"name":"Card","balance":6000,"apr":24,"minPayment":100},
+                {"name":"Loan","balance":2000,"apr":8,"minPayment":80}],"extra":150,"method":"snowball"}
+}
