@@ -9,7 +9,9 @@
   var MAX_DEBTS = 50;
   var MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
-  function emptyState() { return { version: VERSION, method: "snowball", extra: 0, order: [], onboarded: false, lastBackup: null, debts: [] }; }
+  function emptyState() { return { version: VERSION, method: "snowball", extra: 0, order: [], onboarded: false, lastBackup: null, debts: [], deleted: [], settingsAt: null }; }
+
+  function isStamp(x) { return typeof x === "string" && x.length <= 40 && !isNaN(Date.parse(x)); }
 
   function newId() {
     var s = "";
@@ -54,8 +56,10 @@
       }
       var id = typeof raw.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(raw.id) && !seen[raw.id] ? raw.id : newId();
       seen[id] = true;
-      debts.push(PP.recompute({ id: id, name: raw.name, apr: raw.apr, minPayment: raw.minPayment,
-        excluded: raw.excluded === true, sample: raw.sample === true, history: hist }));
+      var made = PP.recompute({ id: id, name: raw.name, apr: raw.apr, minPayment: raw.minPayment,
+        excluded: raw.excluded === true, sample: raw.sample === true, history: hist });
+      if (isStamp(raw.updatedAt)) made.updatedAt = raw.updatedAt; // when it was last edited, used only to combine devices
+      debts.push(made);
     });
     if (errors.length) return { ok: false, errors: errors.slice(0, 5) };
 
@@ -66,14 +70,19 @@
     var ids = {}; debts.forEach(function (d) { ids[d.id] = true; });
     var order = [];
     if (Array.isArray(obj.order)) obj.order.forEach(function (id) { if (typeof id === "string" && ids[id] && order.indexOf(id) < 0) order.push(id); });
+    var deleted = [], dseen = {};
+    if (Array.isArray(obj.deleted)) obj.deleted.slice(0, 200).forEach(function (t) {
+      if (isObj(t) && typeof t.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(t.id) && isStamp(t.at) && !dseen[t.id]) { dseen[t.id] = true; deleted.push({ id: t.id, at: t.at }); }
+    });
     var lastBackup = typeof obj.lastBackup === "string" && !isNaN(Date.parse(obj.lastBackup)) ? obj.lastBackup : null;
     return { ok: true, state: { version: VERSION, method: method, extra: PP.round2(extra), order: order,
-      onboarded: obj.onboarded === undefined ? debts.length > 0 : obj.onboarded === true, lastBackup: lastBackup, debts: debts } };
+      onboarded: obj.onboarded === undefined ? debts.length > 0 : obj.onboarded === true, lastBackup: lastBackup, debts: debts,
+      deleted: deleted, settingsAt: isStamp(obj.settingsAt) ? obj.settingsAt : null } };
   }
 
   function toPayload(state, withExportDate) {
     var p = { app: APP, version: VERSION, method: state.method, extra: state.extra, order: state.order, onboarded: state.onboarded,
-      lastBackup: state.lastBackup, debts: state.debts };
+      lastBackup: state.lastBackup, debts: state.debts, deleted: state.deleted || [], settingsAt: state.settingsAt || null };
     if (withExportDate) { p.exportedAt = new Date().toISOString(); p.lastBackup = p.exportedAt; }
     return p;
   }
@@ -170,7 +179,7 @@
   }
 
   var api = { APP: APP, VERSION: VERSION, KEY: KEY, MAX_DEBTS: MAX_DEBTS, emptyState: emptyState, newId: newId,
-    sanitize: sanitize, serialize: serialize, parseImport: parseImport, toCSV: toCSV, parseCSV: parseCSV, load: load, save: save, clearAll: clearAll };
+    sanitize: sanitize, toPayload: toPayload, serialize: serialize, parseImport: parseImport, toCSV: toCSV, parseCSV: parseCSV, load: load, save: save, clearAll: clearAll };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PLStore = api;
 })(this);

@@ -2,7 +2,7 @@
    No analytics, no cookies, no requests to anyone else. */
 (function () {
   "use strict";
-  var PP = window.PLProgress, PS = window.PLStore, PL = window.PLPlan;
+  var PP = window.PLProgress, PS = window.PLStore, PL = window.PLPlan, SC = window.PLSyncCore;
 
   /* ---------- storage ---------- */
   function getStorage() {
@@ -48,8 +48,23 @@
   function isIOS() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
   function findDebt(id) { for (var i = 0; i < state.debts.length; i++) if (state.debts[i].id === id) return state.debts[i]; return null; }
 
+  /* ---------- optional sign-in and sync (off unless config.js sets a sync address) ---------- */
+  var lastSaved = clone(state);
+  var CFG = window.PL_CONFIG || {};
+  var sync = (window.PLSync && window.PLVault && SC && typeof CFG.syncUrl === "string" && CFG.syncUrl) ? window.PLSync.create({
+    baseUrl: CFG.syncUrl,
+    getState: function () { return state; },
+    applyMerged: function (m) { state = m; lastSaved = clone(state); saveOK = PS.save(ls, state) && !!realStorage; renderAll(); },
+    onStatus: function () { renderAccountStatus(); }
+  }) : null;
+  if (sync && !sync.enabled) sync = null;
+
   /* ---------- saving, undo, toast ---------- */
-  function save() { saveOK = PS.save(ls, state) && !!realStorage; renderPill(); }
+  function save() {
+    if (SC) SC.stampChanges(lastSaved, state, new Date().toISOString());
+    saveOK = PS.save(ls, state) && !!realStorage; lastSaved = clone(state); renderPill();
+    if (sync) sync.schedule();
+  }
   var toastTimer = null, undoSnap = null;
   function toast(text, snap) {
     $("toast-text").textContent = text;
@@ -97,6 +112,7 @@
       if (n === t) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     if (t === "dashboard") renderDashboard();
+    else if (t === "more") renderMore();
     document.title = (t === "dashboard" ? (dashVer === "a" ? "Dashboard: Debt numbers" : "Dashboard: Big picture") : TITLES[t]) + " | Porchlight Ledger Debt Planner";
     if (!firstRoute) { window.scrollTo(0, 0); $("view-" + t).focus({ preventScroll: true }); }
     firstRoute = false;
@@ -109,7 +125,7 @@
 
   function renderPill() {
     var pill = $("saved-pill"), txt = $("saved-pill-text");
-    if (saveOK) { pill.classList.remove("warn"); txt.textContent = "Saved on this device only"; }
+    if (saveOK) { pill.classList.remove("warn"); txt.textContent = sync && sync.signedIn() ? "Saved here and in your account" : "Saved on this device only"; }
     else { pill.classList.add("warn"); txt.textContent = "Not saving. Export a backup"; }
   }
 
@@ -388,7 +404,7 @@
         h += '</div>';
       }
     }
-    h += '<div class="card c-sage"><h3>Your data</h3><p style="margin:0 0 6px">' + (saveOK ? "<strong>Saved on this device only.</strong> Nothing is sent anywhere." : "<strong>Not saving right now.</strong> Back up before you leave.") + '</p>' +
+    h += '<div class="card c-sage"><h3>Your data</h3><p style="margin:0 0 6px">' + (saveOK ? (sync && sync.signedIn() ? "<strong>Saved on this device.</strong> You are signed in, so an encrypted copy is also saved in your account." : "<strong>Saved on this device only.</strong> Nothing is sent anywhere.") : "<strong>Not saving right now.</strong> Back up before you leave.") + '</p>' +
       '<p class="small muted" style="margin:0 0 8px">' + (state.lastBackup ? "Last backup: " + esc(dayLabel(PP.todayISO(new Date(state.lastBackup)))) + "." : "Last backup: never.") + ' ' +
       (persistState === "granted" ? "Your browser has agreed to keep this data." : "Keep a backup file somewhere you trust.") + '</p>' +
       '<button type="button" class="btn btn-small btn-ghost" data-act="export-json">Back up now</button></div>';
@@ -534,7 +550,9 @@
   }
 
   function renderMore() {
-    var h = '<div class="card"><h3>Your data</h3><p><strong>Saved on this device only.</strong> Nothing you enter is sent anywhere. There are no accounts, no cookies and no tracking.</p>';
+    var h = '<div class="card"><h3>Your data</h3>' + (sync
+      ? '<p><strong>Saved on this device.</strong> If you choose to sign in below, an encrypted copy is also saved so you can open it on other devices. No cookies and no tracking.</p>'
+      : '<p><strong>Saved on this device only.</strong> Nothing you enter is sent anywhere. There are no accounts, no cookies and no tracking.</p>');
     if (!saveOK) h += '<div class="notice"><strong>This browser is not letting the app save.</strong> This can happen in private browsing. Your changes will be lost when you close the page, so export a backup before you leave.</div>';
     if (loadStatus === "corrupt") h += '<div class="notice">The saved data on this device could not be read, so the app started fresh. The old data was kept aside and not deleted.</div>';
     h += '<p class="small muted">' + (state.lastBackup ? "Last backup: " + esc(dayLabel(PP.todayISO(new Date(state.lastBackup)))) + "." : "Last backup: never.") + ' Keep a backup file somewhere you trust.</p>' +
@@ -546,6 +564,7 @@
     if (persistState !== "granted" && persistState !== "unsupported") h += '<button type="button" class="btn btn-small btn-ghost" data-act="persist">Ask the browser to keep my data</button>';
     h += safariLine() + '<div class="row-actions"><button type="button" class="btn-link" data-act="clear">Clear all data</button></div></div>';
 
+    h += accountCard();
     h += '<div class="card" id="install-card"><h3>Install on your phone</h3>';
     if (isStandalone()) h += "<p>You are using the installed app.</p>";
     else {
@@ -565,7 +584,7 @@
 
     h += '<div class="card"><h3>How the numbers work</h3><p class="small">Interest is added each month at APR divided by 12. Then your payments are applied: each debt gets its minimum, and the rest (your extra, plus minimums freed up by paid off debts) goes to the first debt in your order. The plan assumes fixed APRs, no new charges and the same total payment every month. Real statements can differ a little.</p>' +
       '<p class="small" style="margin:0">Educational tool, not financial advice.</p></div>';
-    h += '<p class="small muted">Debt Planner, private preview. Works offline once opened. Data stays in this browser.</p>';
+    h += '<p class="small muted">Debt Planner, private preview. Works offline once opened. ' + (sync && sync.signedIn() ? 'Data stays on this device, plus an encrypted copy in your account.' : 'Data stays in this browser.') + '</p>';
     $("more").innerHTML = h;
   }
 
@@ -800,6 +819,14 @@
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then(function () { deferredPrompt = null; renderMore(); });
+    } else if (act === "acct-mode") { acct.mode = t.getAttribute("data-mode"); acct.error = ""; renderMore(); var af = $("a-email"); if (af) af.focus();
+    } else if (act === "acct-sync") { if (sync) { toast("Syncing..."); sync.syncNow(); }
+    } else if (act === "acct-retry") { acct.probed = false; renderMore();
+    } else if (act === "acct-signout") { if (sync) sync.signOut().then(function () { acct.wasIn = false; renderMore(); toast("Signed out. Your data is still on this device."); });
+    } else if (act === "acct-delete") {
+      confirmDlg("Delete your account?", "This permanently deletes your account and the encrypted copy saved with it. The data on this device is not deleted, and the app keeps working here.", "Delete my account", function () {
+        sync.deleteAccount().then(function () { acct.wasIn = false; renderMore(); toast("Your account and its saved copy were deleted."); }, function (e) { toast(e.offline ? "Can't reach the sync service. Your account was not deleted." : "The account could not be deleted. Try again."); });
+      });
     } else if (act === "clear") {
       confirmDlg("Clear all data?", "This deletes every debt, payment record and setting stored on this device. If you have not made a backup, it cannot be brought back.", "Clear all data", function () {
         PS.clearAll(ls); state = PS.emptyState(); state.onboarded = true; loadStatus = "empty"; save(); renderAll(); go("dashboard");
@@ -820,6 +847,106 @@
   document.addEventListener("change", function (e) {
     if (e.target.name === "method") { state.method = e.target.value; save(); renderAll(); }
   });
+
+  /* ---------- account card (only when sync is configured) ---------- */
+  var acct = { mode: "create", busy: false, error: "", probed: false, probing: false, resetSent: false, wasIn: false };
+  function fmtWhen(iso) { try { return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso)); } catch (e) { return ""; } }
+  function statusText() {
+    var st = sync.status();
+    if (st.state === "syncing") return "Saving...";
+    if (st.state === "synced") return "Saved to your account" + (st.at ? " (" + fmtWhen(st.at) + ")." : ".");
+    if (st.state === "offline" || st.state === "error" || st.message) return st.message || "";
+    return sync.signedIn() ? "Signed in." : "";
+  }
+  function renderAccountStatus() {
+    if (!sync) return;
+    if (sync.signedIn() !== acct.wasIn) { acct.wasIn = sync.signedIn(); renderPill(); renderDashboard(); if (document.getElementById("view-more") && !$("view-more").hidden) renderMore(); return; }
+    renderPill(); var el = $("acct-status"); if (el) el.textContent = statusText();
+  }
+  function passField(id, label, autocomplete, hint) {
+    return '<div class="field"><label for="' + id + '">' + label + '</label><div class="input"><input id="' + id + '" type="password" autocomplete="' + autocomplete + '" autocapitalize="off" spellcheck="false"' + (hint ? ' aria-describedby="' + id + '-hint"' : "") + '></div>' + (hint ? '<p class="hint" id="' + id + '-hint" aria-live="polite">' + hint + "</p>" : "") + "</div>";
+  }
+  function accountCard() {
+    if (!sync) return "";
+    var h = '<div class="card" id="account-card"><h3>Use it on other devices (optional)</h3>';
+    if (sync.signedIn()) {
+      h += '<p>Signed in as <strong>' + esc(sync.email()) + '</strong>.</p><p class="small" id="acct-status" role="status" aria-live="polite">' + esc(statusText()) + '</p>' +
+        '<p class="small muted">Your debts are encrypted on this device before they are saved, so the service only holds scrambled data it cannot read. Signing out keeps your data on this device.</p>' +
+        '<div class="row-actions"><button type="button" class="btn btn-small" data-act="acct-sync">Sync now</button><button type="button" class="btn btn-small btn-ghost" data-act="acct-signout">Sign out</button></div>' +
+        '<div class="row-actions"><button type="button" class="btn-link" data-act="acct-delete">Delete my account</button></div>';
+    } else if (!acct.probed) {
+      if (!acct.probing && currentTab === "more") { acct.probing = true; sync.probe().then(function () { acct.probed = true; acct.probing = false; if (!$("view-more").hidden) renderMore(); }); }
+      h += '<p class="small muted" role="status">Checking the sync service...</p>';
+    } else if (!sync.features()) {
+      h += '<div class="notice info"><strong>Sign-in is not available right now.</strong> The sync service could not be reached. The app still works fully on this device.</div>' +
+        '<button type="button" class="btn btn-small btn-ghost" data-act="acct-retry">Try again</button>';
+    } else {
+      var canReset = !!sync.features().reset, m = acct.mode;
+      h += '<p>You do not need an account. If you make one, your debts are encrypted on this device before they are saved, so we cannot read them. Your passphrase is never sent to us.</p>' +
+        '<p><strong>If you forget your passphrase, nobody can recover your saved copy.</strong> Keep a backup file as well.</p>' +
+        '<div class="row-actions" role="group" aria-label="Account choice">' +
+        '<button type="button" class="btn btn-small' + (m === "create" ? "" : " btn-ghost") + '" data-act="acct-mode" data-mode="create" aria-pressed="' + (m === "create") + '">Create account</button>' +
+        '<button type="button" class="btn btn-small' + (m === "signin" ? "" : " btn-ghost") + '" data-act="acct-mode" data-mode="signin" aria-pressed="' + (m === "signin") + '">Sign in</button>' +
+        (canReset ? '<button type="button" class="btn btn-small' + (m === "reset" ? "" : " btn-ghost") + '" data-act="acct-mode" data-mode="reset" aria-pressed="' + (m === "reset") + '">Forgot passphrase</button>' : "") + '</div>' +
+        '<form id="acct-form" novalidate style="margin-top:14px">' +
+        '<div class="field"><label for="a-email">Email</label><div class="input"><input id="a-email" type="email" autocomplete="username" autocapitalize="off" spellcheck="false"></div><p class="hint">Used only to name your account. We do not send you email.</p></div>';
+      if (m === "reset") {
+        h += '<p class="small">Resetting starts a new, empty saved copy. The old encrypted copy is deleted because it cannot be opened without the old passphrase. This device\'s data is then saved as the new copy.</p>';
+        if (acct.resetSent) h += '<div class="field"><label for="a-code">Code from the email</label><div class="input"><input id="a-code" type="text" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"></div></div>' +
+          passField("a-pass", "New passphrase", "new-password", "At least 12 characters.") + passField("a-pass2", "New passphrase again", "new-password");
+      } else if (m === "create") {
+        h += passField("a-pass", "Passphrase", "new-password", "At least 12 characters. Four or more unrelated words works well.") + passField("a-pass2", "Passphrase again", "new-password") +
+          '<label class="check"><input id="a-ack" type="checkbox"><span>I understand that if I forget my passphrase, nobody can recover my saved data.</span></label>';
+      } else h += passField("a-pass", "Passphrase", "current-password") +
+        '<p class="small muted">If this device already has debts, they are combined with the ones saved in your account.</p>';
+      h += '<div id="acct-err" role="alert" tabindex="-1" class="err focus-target"' + (acct.error ? "" : " hidden") + '>' + esc(acct.error) + '</div>' +
+        '<div class="row-actions"><button type="submit" class="btn" id="a-go">' + (m === "create" ? "Create account" : m === "signin" ? "Sign in" : acct.resetSent ? "Reset and sign in" : "Email me a code") + '</button></div></form>';
+    }
+    return h + "</div>";
+  }
+  function acctFail(e) {
+    acct.busy = false;
+    acct.error = e && e.offline ? "Can't reach the sync service right now. Nothing was changed." : (e && e.message) || "Something went wrong. Nothing was changed.";
+    var em = $("a-email") ? $("a-email").value : "";
+    renderMore(); if ($("a-email")) $("a-email").value = em; var box = $("acct-err"); if (box) box.focus();
+  }
+  document.addEventListener("input", function (e) {
+    if (e.target.id !== "a-pass" || acct.mode === "signin") return;
+    var hint = $("a-pass-hint"), st = window.PLVault.strength(e.target.value);
+    if (hint) hint.textContent = e.target.value ? st.label : (acct.mode === "create" ? "At least 12 characters. Four or more unrelated words works well." : "At least 12 characters.");
+  });
+  document.addEventListener("submit", function (e) {
+    if (e.target.id !== "acct-form" || !sync) return;
+    e.preventDefault();
+    if (acct.busy) return;
+    var email = $("a-email").value.trim(), pass = $("a-pass") ? $("a-pass").value : "", pass2 = $("a-pass2") ? $("a-pass2").value : "";
+    function bad(msg) { acct.error = msg; var b = $("acct-err"); b.textContent = msg; b.hidden = false; b.focus(); }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad("Enter a valid email address.");
+    var m = acct.mode;
+    if (m === "reset" && !acct.resetSent) {
+      acct.busy = true; $("a-go").disabled = true;
+      sync.requestReset(email).then(function () { acct.busy = false; acct.resetSent = true; acct.error = ""; renderMore(); $("a-email").value = email; if ($("a-code")) $("a-code").focus(); toast("If that email has an account, a code is on its way."); }, acctFail);
+      return;
+    }
+    if (!pass) return bad("Enter your passphrase.");
+    if (m !== "signin") {
+      var st = window.PLVault.strength(pass);
+      if (!st.ok) return bad(st.label);
+      if (pass !== pass2) return bad("The two passphrases do not match.");
+    }
+    if (m === "create" && !$("a-ack").checked) return bad("Please tick the box to confirm you understand.");
+    acct.busy = true; acct.error = ""; $("a-go").disabled = true; $("a-go").textContent = "Working...";
+    var p = m === "create" ? sync.register(email, pass) : m === "signin" ? sync.login(email, pass) : sync.confirmReset(email, $("a-code").value, pass);
+    p.then(function () {
+      acct.busy = false; acct.resetSent = false; acct.wasIn = sync.signedIn(); renderMore();
+      toast(m === "signin" ? "Signed in. Your data is combined and saved." : "You are signed in. An encrypted copy is saved.");
+    }, acctFail);
+  });
+  if (sync) {
+    sync.init().then(function () { acct.wasIn = sync.signedIn(); if (sync.signedIn()) { renderAccountStatus(); sync.syncNow(); } if (!$("view-more").hidden) renderMore(); });
+    document.addEventListener("visibilitychange", function () { if (!document.hidden && sync.signedIn()) sync.syncNow(); });
+    window.addEventListener("online", function () { if (sync.signedIn()) sync.syncNow(); });
+  }
 
   /* ---------- first run ---------- */
   var onbStep = 1;
