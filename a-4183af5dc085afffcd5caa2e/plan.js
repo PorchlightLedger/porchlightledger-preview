@@ -69,7 +69,7 @@
     var done = !remaining();
     return { method: "custom", mode: mode, paidOff: done, capped: !done, months: done ? month : null, simulatedMonths: month,
       maxMonths: maxMonths, totalInterest: totalInterest, totalPaid: totalPaid, monthlyBudget: budget, order: order,
-      payoffMonth: payoff, interestByDebt: interestBy, remainingBalance: bal.reduce(function (s, b) { return s + b; }, 0) };
+      payoffMonth: payoff, interestByDebt: interestBy, remainingBalance: bal.reduce(function (s, b) { return s + b; }, 0), balances: bal.slice() };
   }
 
   // One plan for the chosen method.
@@ -158,8 +158,23 @@
     return { months: months, plan: line(true), minimums: line(false), startBalance: total };
   }
 
+  /* Balance of each debt at the end of each sampled month, in the plan's payoff order. Same rules as the plan itself.
+     Returns { months: [0, ...], series: [[balance at each sampled month] for each debt in `active`] }. */
+  function balanceSeries(active, order, extra, horizon, maxPoints) {
+    maxPoints = maxPoints || 36;
+    var step = Math.max(1, Math.ceil(horizon / maxPoints)), months = [], m;
+    for (m = 0; m < horizon; m += step) months.push(m);
+    months.push(horizon);
+    var series = active.map(function () { return []; });
+    months.forEach(function (mm) {
+      var bal = mm === 0 ? active.map(function (d) { return d.balance; }) : simulateOrdered(active, order, { extra: extra, maxMonths: mm }).balances;
+      bal.forEach(function (b, i) { series[i].push(b); });
+    });
+    return { months: months, series: series };
+  }
+
   var api = { MAX_MONTHS: MAX_MONTHS, activeDebts: activeDebts, orderFor: orderFor, simulateOrdered: simulateOrdered, run: run,
-    minimumsOnly: minimumsOnly, compareMethods: compareMethods, thisMonth: thisMonth, moveId: moveId, monthDate: monthDate, chartSeries: chartSeries };
+    minimumsOnly: minimumsOnly, compareMethods: compareMethods, thisMonth: thisMonth, moveId: moveId, monthDate: monthDate, chartSeries: chartSeries, balanceSeries: balanceSeries };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PLPlan = api;
 })(this);

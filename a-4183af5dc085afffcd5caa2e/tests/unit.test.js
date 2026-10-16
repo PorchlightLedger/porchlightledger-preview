@@ -304,3 +304,21 @@ test("chartSeries starts at the total, falls to zero, and is never below the min
   for (let i = 1; i < s.plan.length; i++) assert.ok(s.plan[i].b <= s.plan[i - 1].b + 1e-6);
   assert.ok(s.minimums[s.minimums.length - 1].b >= s.plan[s.plan.length - 1].b);
 });
+
+test("balanceSeries per debt adds up to the plan's total balance and ends at zero", () => {
+  const order = P.orderDebts(SAMPLE, "avalanche"), plan = P.simulate(SAMPLE, { method: "avalanche", extra: 200 });
+  const b = PL.balanceSeries(SAMPLE, order, 200, plan.months), c = PL.chartSeries(SAMPLE, { method: "avalanche" }, 200, plan.months);
+  assert.equal(b.series.length, 3);
+  assert.deepEqual(b.months, c.months);
+  b.months.forEach((m, k) => {
+    const sum = b.series.reduce((s, line) => s + line[k], 0);
+    assert.ok(Math.abs(sum - c.plan[k].b) < 1e-6, "month " + m);
+  });
+  assert.ok(b.series.every((line) => line[line.length - 1] === 0));
+  assert.deepEqual(b.series.map((l) => l[0]), [800, 4500, 9000]);
+});
+
+test("simulateOrdered reports per debt interest that adds up to the total", () => {
+  const r = PL.simulateOrdered(SAMPLE, P.orderDebts(SAMPLE, "snowball"), { extra: 200 });
+  assert.ok(Math.abs(r.interestByDebt.reduce((s, x) => s + x, 0) - r.totalInterest) < 1e-9);
+});

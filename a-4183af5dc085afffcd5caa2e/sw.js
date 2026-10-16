@@ -1,7 +1,7 @@
 /* Porchlight Ledger Debt Planner service worker.
    Cache-first app shell, same-origin only, no network calls to anyone else. All paths are relative to this file,
    so it works under any subfolder. Bump CACHE_VERSION (tools/stamp) when files change. */
-var CACHE_VERSION = "1b0e51037e";
+var CACHE_VERSION = "2a00590fc0";
 var CACHE = "pl-ledger-" + CACHE_VERSION;
 var SHELL = [
   "./", "index.html", "app.css", "app.js", "payoff.js", "progress.js", "store.js", "plan.js",

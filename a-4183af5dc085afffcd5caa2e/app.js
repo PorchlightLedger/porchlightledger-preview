@@ -83,24 +83,29 @@
   }
 
   /* ---------- views ---------- */
-  var TABS = ["home", "debts", "plan", "more"];
-  var TITLES = { home: "Home", debts: "Your debts", plan: "Your plan", more: "More" };
-  var currentTab = "home", firstRoute = true;
+  var TABS = ["dashboard", "debts", "plan", "more"];
+  var TITLES = { dashboard: "Dashboard", debts: "Your debts", plan: "Your plan", more: "More" };
+  var currentTab = "dashboard", firstRoute = true;
   function route() {
-    var t = (location.hash || "#home").slice(1);
-    if (TABS.indexOf(t) < 0) t = "home";
+    var raw = (location.hash || "").replace(/^#\/?/, ""), t = raw;
+    if (raw === "dashboard-a" || raw === "dashboard-b") { t = "dashboard"; dashVer = raw.slice(-1); writeDashVer(dashVer); }
+    else if (raw === "dashboard" || raw === "home" || TABS.indexOf(raw) < 0) t = "dashboard";
     currentTab = t;
     TABS.forEach(function (n) {
       $("view-" + n).hidden = n !== t;
       var a = document.querySelector('.tabbar a[data-tab="' + n + '"]');
       if (n === t) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    document.title = TITLES[t] + " | Porchlight Ledger Debt Planner";
+    if (t === "dashboard") renderDashboard();
+    document.title = (t === "dashboard" ? (dashVer === "a" ? "Dashboard: Debt numbers" : "Dashboard: Big picture") : TITLES[t]) + " | Porchlight Ledger Debt Planner";
     if (!firstRoute) { window.scrollTo(0, 0); $("view-" + t).focus({ preventScroll: true }); }
     firstRoute = false;
   }
   window.addEventListener("hashchange", route);
-  function go(tab) { if (location.hash === "#" + tab) route(); else location.hash = "#" + tab; }
+  function go(tab) {
+    var h = tab === "dashboard" ? "#dashboard-" + dashVer : "#" + tab;
+    if (location.hash === h) route(); else location.hash = h;
+  }
 
   function renderPill() {
     var pill = $("saved-pill"), txt = $("saved-pill-text");
@@ -179,36 +184,223 @@
     return '<div class="notice"><p style="margin:0">You are in a Safari tab. Safari can clear saved data from tabs you have not opened in a while. Tap Share, then Add to Home Screen, and keep a backup file.</p></div>';
   }
 
-  function renderHome() {
-    var h = "", P = planFor(state), sum = PP.summary(state.debts);
-    if (!state.debts.length) {
-      h = '<div class="card hero"><h3>Nothing here yet, and that is okay.</h3><p>Add your first debt when you are ready. Your numbers stay on this device.</p>' +
-        '<div class="row-actions"><button type="button" class="btn" data-act="add">Add a debt</button><button type="button" class="btn btn-ghost" data-act="sample">Try a sample plan</button></div>' +
-        '<p class="small muted" style="margin:10px 0 0">The sample plan uses made up example debts and is labeled as an example.</p></div>';
-      $("home").innerHTML = h; return;
+  /* ---------- dashboards ---------- */
+  var DASH_KEY = "plledger.debtplanner.dashview";
+  var COLORS = ["#2F7A72", "#C8664B", "#D9A02E", "#4F86B5", "#7A5C99", "#7E9A32"];
+  function colorOf(id) { for (var i = 0; i < state.debts.length; i++) if (state.debts[i].id === id) return COLORS[i % COLORS.length]; return COLORS[0]; }
+  function readDashVer() { try { var v = realStorage && realStorage.getItem(DASH_KEY); return v === "a" || v === "b" ? v : null; } catch (e) { return null; } }
+  function writeDashVer(v) { try { if (realStorage) realStorage.setItem(DASH_KEY, v); } catch (e) { /* ignore */ }  }
+  var queryVer = (/[?&]view=(a|b)\b/.exec(location.search) || [])[1] || null;
+  var dashVer = queryVer || readDashVer() || "b";
+
+  function switchHTML() {
+    function item(v, label) {
+      return '<a href="#dashboard-' + v + '" data-ver="' + v + '"' + (dashVer === v ? ' aria-current="true"' : "") + ">" + label + "</a>";
     }
-    h += sampleBanner();
+    return '<nav class="seg no-print" aria-label="Dashboard version">' + item("a", "Debt numbers") + item("b", "Big picture") + "</nav>";
+  }
+  function tile(label, valueHTML, cls, sub) {
+    return '<div class="tile ' + (cls || "") + '"><dt>' + label + '</dt><dd>' + valueHTML + '</dd>' + (sub ? '<div class="tile-sub">' + sub + "</div>" : "") + "</div>";
+  }
+  function legendHTML(items) {
+    return '<div class="legend">' + items.map(function (x) { return '<span><i class="sw" style="background:' + x[1] + '"></i>' + esc(x[0]) + "</span>"; }).join("") + "</div>";
+  }
+  function emptyDash() {
+    return '<div class="card hero"><h3>Nothing here yet, and that is okay.</h3><p>Add your first debt when you are ready. Your numbers stay on this device.</p>' +
+      '<div class="row-actions"><button type="button" class="btn" data-act="add">Add a debt</button><button type="button" class="btn btn-ghost" data-act="sample">Try a sample plan</button></div>' +
+      '<p class="small muted" style="margin:10px 0 0">The sample plan uses made up example debts and is labeled as an example.</p></div>';
+  }
+  function interestThisMonth(P) { return P.active.reduce(function (s, d) { return s + d.balance * d.apr / 100 / 12; }, 0); }
+
+  function ringHTML(pct, label) {
+    var r = 52, c = 2 * Math.PI * r, off = c * (1 - pct / 100);
+    return '<svg class="ring" viewBox="0 0 130 130" role="img" aria-label="' + esc(label) + '" focusable="false">' +
+      '<circle cx="65" cy="65" r="' + r + '" fill="none" stroke="#fff" stroke-width="14"/>' +
+      '<circle cx="65" cy="65" r="' + r + '" fill="none" stroke="#2F7A72" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 65 65)"/>' +
+      '<text x="65" y="64" text-anchor="middle" font-family="DM Serif Display, Georgia, serif" font-size="30" fill="#1F4E4A">' + pct + '%</text>' +
+      '<text x="65" y="84" text-anchor="middle" font-size="12" font-weight="600" fill="#4a5755" font-family="Source Sans Pro, system-ui, sans-serif">paid</text></svg>';
+  }
+
+  function sparkSVG(points, maxV, color, label, endLabel) {
+    var W = 320, H = 96, L = 4, R = 4, T = 8, B = 8, n = points.length, x0 = points[0].x, x1 = points[n - 1].x || 1;
+    function X(v) { return L + (W - L - R) * (v - x0) / ((x1 - x0) || 1); }
+    function Y(v) { return T + (H - T - B) * (1 - v / (maxV || 1)); }
+    var pts = points.map(function (p) { return X(p.x).toFixed(1) + "," + Y(p.y).toFixed(1); }).join(" ");
+    return '<svg class="spark" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '" focusable="false">' +
+      '<polygon points="' + X(x0).toFixed(1) + "," + Y(0) + " " + pts + " " + X(x1).toFixed(1) + "," + Y(0) + '" fill="' + color + '" opacity=".18"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+
+  /* Stacked area: balance of each debt over the plan. */
+  function stackedSVG(P) {
+    var plan = P.plan; if (!plan.paidOff) return "";
+    var S = PL.balanceSeries(P.active, plan.order, state.extra, plan.months), n = P.active.length;
+    var W = 360, H = 230, L = 50, R = 12, T = 12, B = 34, pw = W - L - R, ph = H - T - B, horizon = plan.months;
+    var total = P.active.reduce(function (s, d) { return s + d.balance; }, 0) || 1;
+    function X(m) { return L + pw * m / horizon; }
+    function Y(b) { return T + ph * (1 - b / total); }
+    var cum = S.months.map(function () { return 0; }), layers = "";
+    // stack from the last debt to be paid off at the bottom, so the debt paid first sits on top and disappears first
+    for (var k = plan.order.length - 1; k >= 0; k--) {
+      var di = plan.order[k], low = cum.slice(), hi = S.series[di].map(function (b, j) { return cum[j] + b; });
+      var up = S.months.map(function (m, j) { return X(m).toFixed(1) + "," + Y(hi[j]).toFixed(1); });
+      var dn = S.months.map(function (m, j) { return X(m).toFixed(1) + "," + Y(low[j]).toFixed(1); }).reverse();
+      layers += '<polygon points="' + up.concat(dn).join(" ") + '" fill="' + colorOf(P.active[di].id) + '" stroke="#fff" stroke-width="1"/>';
+      cum = hi;
+    }
+    var label = "Balance of each debt over time, stacked. Starts at " + money0.format(total) + " and reaches $0 in " + monthLabel(plan.months) + ".";
+    return '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '" focusable="false">' +
+      '<line x1="' + L + '" y1="' + Y(0) + '" x2="' + (W - R) + '" y2="' + Y(0) + '" stroke="#6f827e"/>' + layers +
+      '<g font-size="11" fill="#4a5755" font-family="Source Sans Pro, system-ui, sans-serif">' +
+      '<text x="' + (L - 6) + '" y="' + (Y(total) + 4) + '" text-anchor="end">' + esc(moneyC.format(total)) + '</text>' +
+      '<text x="' + (L - 6) + '" y="' + (Y(0) + 4) + '" text-anchor="end">$0</text>' +
+      '<text x="' + L + '" y="' + (H - 12) + '">Now</text><text x="' + (W - R) + '" y="' + (H - 12) + '" text-anchor="end">' + esc(monthLabel(horizon, monthShort)) + '</text></g></svg>';
+  }
+
+  function dashA(P, sum) {
+    var h = "";
+    var minTotal = P ? P.active.reduce(function (s, d) { return s + d.minPayment; }, 0) : 0;
+    h += '<dl class="tiles">' +
+      tile("You owe now", m0$(sum.totalCurrent), "t-teal", plural(sum.active, "debt") + " still open") +
+      tile("Paid down so far", m0$(sum.totalPaidDown), "t-sage", sum.percent + "% of " + money0.format(sum.totalStart)) +
+      (P && P.plan.paidOff ? tile("Interest still to come", m0$(P.plan.totalInterest), "t-peach", "if you follow this plan") : tile("Interest still to come", "n/a", "t-peach", "")) +
+      (P ? tile("Interest this month", m0$(interestThisMonth(P)), "t-butter", "estimate from today's balances") : "") +
+      (P ? tile("Minimums a month", m0$(minTotal), "t-sky", "all debts in the plan") : "") +
+      (P ? tile("Extra a month", m0$(state.extra), "t-lilac", state.extra ? "on top of minimums" : "none set yet") : "") + "</dl>";
+    if (sum.active) h += '<button type="button" class="btn btn-block" data-act="log" style="margin-bottom:16px">Log a payment</button>';
+    if (!P) {
+      h += '<div class="card"><p>' + (sum.allPaidOff ? "Every debt here is paid off. The numbers above are what you paid down." : "All remaining debts are left out of the plan. Edit a debt to put it back in.") + "</p></div>";
+    }
+    // where each debt stands
+    h += '<div class="card"><h3>Where each debt stands</h3><ul class="list-plain">';
+    state.debts.forEach(function (d) {
+      var pct = PP.percentPaid(d.startBalance, d.balance), idx = P ? P.active.map(function (a) { return a.id; }).indexOf(d.id) : -1;
+      var intr = idx >= 0 && P.plan.paidOff ? P.plan.interestByDebt[idx] : null;
+      h += '<li><div class="split"><span><i class="sw" style="background:' + colorOf(d.id) + '"></i><strong>' + esc(d.name) + '</strong>' + (d.sample ? ' <span class="tag terra">Example</span>' : "") + '</span><strong>' + m$(d.balance) + '</strong></div>' +
+        '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '" aria-label="' + esc(d.name + ": " + pct + " percent paid") + '"><span style="width:' + pct + '%;background:' + colorOf(d.id) + '"></span></div>' +
+        '<div class="small muted">' + (d.balance <= 0 ? "Paid off" + (d.paidOffDate ? " on " + esc(dayLabel(d.paidOffDate)) : "") : pct + "% paid. " + d.apr + "% APR. Minimum " + money.format(d.minPayment) + " a month." + (d.excluded ? " Not in plan." : "") + (intr !== null ? " About " + money0.format(intr) + " interest still to come." : "")) + "</div></li>";
+    });
+    h += "</ul></div>";
+    if (P && P.plan.paidOff) {
+      var plan = P.plan, maxTot = 0;
+      plan.order.forEach(function (i) { maxTot = Math.max(maxTot, P.active[i].balance + plan.interestByDebt[i]); });
+      h += '<div class="card"><h3>Principal and interest</h3><p class="small muted">What you will pay on each debt over the plan: the balance itself, and the interest on top.</p><ul class="list-plain">';
+      plan.order.forEach(function (i) {
+        var d = P.active[i], it = plan.interestByDebt[i], tot = d.balance + it, w = 100 * tot / maxTot;
+        h += '<li><div class="split"><strong>' + esc(d.name) + '</strong><span class="amt">' + money0.format(tot) + ' in all</span></div>' +
+          '<div class="stack" role="img" aria-label="' + esc(d.name + ": balance " + money0.format(d.balance) + ", interest " + money0.format(it)) + '" style="width:' + w.toFixed(1) + '%"><span style="flex:' + d.balance + ';background:#2F7A72"></span><span style="flex:' + Math.max(it, 0.0001) + ';background:#C8664B"></span></div>' +
+          '<div class="small muted">Balance ' + m$(d.balance) + ' plus interest ' + m$(it) + '</div></li>';
+      });
+      h += '</ul>' + legendHTML([["Balance", "#2F7A72"], ["Interest", "#C8664B"]]) + '</div>';
+      h += '<div class="card"><h3>Balance by debt over time</h3>' + stackedSVG(P) + legendHTML(plan.order.map(function (i) { return [P.active[i].name, colorOf(P.active[i].id)]; })) + '</div>';
+      h += '<div class="card"><h3>Payoff timeline</h3><p class="small muted">Each bar runs until that debt is paid off. The plan finishes in ' + esc(monthLabel(plan.months)) + '.</p><ul class="list-plain">';
+      plan.order.forEach(function (i) {
+        var d = P.active[i], m = plan.payoffMonth[i];
+        h += '<li><div class="split"><strong>' + esc(d.name) + '</strong><span class="amt">' + esc(monthLabel(m, monthShort)) + '</span></div>' +
+          '<div class="track" role="img" aria-label="' + esc(d.name + " paid off in " + monthLabel(m)) + '"><span style="width:' + Math.max(3, 100 * m / plan.months).toFixed(1) + '%;background:' + colorOf(d.id) + '"></span></div></li>';
+      });
+      h += '</ul></div>';
+      var rows = PL.thisMonth(P.active, plan.order, state.extra), mi = 0, ex = 0;
+      rows.forEach(function (r) { mi += r.minimum; ex += r.extra; });
+      h += '<div class="card"><h3>Minimums and extra this month</h3><div class="stack" role="img" aria-label="' + esc("Minimums " + money0.format(mi) + ", extra " + money0.format(ex)) + '"><span style="flex:' + Math.max(mi, 0.0001) + ';background:#2F7A72"></span><span style="flex:' + Math.max(ex, 0.0001) + ';background:#C8664B"></span></div>' +
+        '<p style="margin:8px 0 0">Minimums ' + m$(mi) + ' plus extra ' + m$(ex) + ' makes ' + m$(mi + ex) + '.</p>' + legendHTML([["Minimums", "#2F7A72"], ["Extra", "#C8664B"]]) + '</div>';
+    } else if (P) {
+      h += '<div class="notice">With this plan the balances do not reach $0 within 50 years, so the interest and timeline charts are left out. A larger extra amount on the Plan tab can change that.</div>';
+    }
+    return h;
+  }
+
+  function recentActivity() {
+    var ev = [];
+    state.debts.forEach(function (d, di) {
+      PP.historyChanges(d).forEach(function (c, i) { ev.push({ date: c.date, name: d.name, c: c, first: i === 0, di: di, i: i }); });
+    });
+    ev.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.di - a.di) || (b.i - a.i); });
+    return ev.slice(0, 5).map(function (e) {
+      var txt;
+      if (e.first) txt = "Added " + esc(e.name) + " at " + money.format(e.c.balance);
+      else if (e.c.balance <= 0) txt = esc(e.name) + " paid off";
+      else if (e.c.change > 0) txt = "Paid down " + esc(e.name) + " by " + money.format(e.c.change);
+      else if (e.c.change < 0) txt = esc(e.name) + " balance went up by " + money.format(-e.c.change);
+      else txt = esc(e.name) + " balance confirmed at " + money.format(e.c.balance);
+      return '<li><span>' + txt + '</span><span class="small muted nowrap">' + esc(dayLabel(e.date)) + "</span></li>";
+    }).join("");
+  }
+
+  function loggedTrend() {
+    var dates = {};
+    state.debts.forEach(function (d) { d.history.forEach(function (h) { dates[h.date] = true; }); });
+    var ds = Object.keys(dates).sort();
+    if (ds.length < 2) return null;
+    return ds.map(function (date, i) {
+      var t = 0; state.debts.forEach(function (d) { if (d.history[0].date <= date) t += PP.balanceOn(d, date); });
+      return { x: i, y: t, date: date };
+    });
+  }
+
+  function dashB(P, sum) {
+    var h = "", plan = P && P.plan;
     if (sum.allPaidOff) {
-      h += '<div class="card hero"><p class="eyebrow">All paid off</p><p class="big">Every debt here is paid off.</p><p>You paid down ' + m$(sum.totalPaidDown) + ' in total. Take a moment with that.</p></div>';
+      h += '<div class="card hero ring-card"><div>' + ringHTML(100, "All debts paid off") + '</div><div><p class="eyebrow">All paid off</p><p class="big">Every debt here is paid off.</p><p style="margin:0">You paid down ' + m$(sum.totalPaidDown) + ' in total. Take a moment with that.</p></div></div>';
     } else if (!P) {
-      h += '<div class="card hero"><p class="eyebrow">Your debt-free date</p><p class="big">Not set yet</p><p>All your remaining debts are left out of the plan. Edit a debt to put it back in.</p></div>';
-    } else if (!P.plan.paidOff) {
-      h += '<div class="card hero"><p class="eyebrow">Your debt-free date</p><p class="big">Not within 50 years</p><p>At ' + m$(P.plan.monthlyBudget) + ' a month, these balances do not reach $0. A larger extra amount on the Plan tab can change that.</p></div>';
+      h += '<div class="card hero"><p class="eyebrow">Your debt-free date</p><p class="big">Not set yet</p><p style="margin:0">All your remaining debts are left out of the plan. Edit a debt to put it back in.</p></div>';
     } else {
-      h += '<div class="card hero"><p class="eyebrow">Your debt-free date</p><p class="big">' + esc(monthLabel(P.plan.months)) + '</p>' +
-        '<p style="margin:0">About ' + esc(duration(P.plan.months)) + ' from now, paying ' + m$(P.plan.monthlyBudget) + ' a month.' +
-        (P.saved && P.saved.months > 0 ? " That is " + plural(P.saved.months, "month") + " sooner than minimums only." : "") + '</p>' +
-        '<p class="small muted" style="margin:6px 0 0">' + esc(planName(state.method)) + '. Estimate, not a promise.</p></div>';
+      var date = plan.paidOff ? monthLabel(plan.months) : "Not within 50 years";
+      h += '<div class="card hero ring-card"><div>' + ringHTML(sum.percent, "Overall " + sum.percent + " percent paid") + '</div><div><p class="eyebrow">Your debt-free date</p><p class="big">' + esc(date) + '</p>' +
+        (plan.paidOff ? '<p style="margin:0">About ' + esc(duration(plan.months)) + ' from now.' + (P.saved && P.saved.months > 0 ? " " + plural(P.saved.months, "month") + " sooner than minimums only." : "") + "</p>" :
+          '<p style="margin:0">At ' + m$(plan.monthlyBudget) + ' a month the balances do not reach $0. A larger extra amount on the Plan tab can change that.</p>') +
+        '<p class="small muted" style="margin:6px 0 0">' + esc(planName(state.method)) + '. Estimate, not a promise.</p></div></div>';
     }
     if (sum.active) h += '<button type="button" class="btn btn-block" data-act="log" style="margin-bottom:16px">Log a payment</button>';
-    h += backupLine() + safariLine();
-    if (P) h += thisMonthHTML(P);
-    h += '<div class="card"><h3>Your progress</h3><div class="split"><span>Left to pay</span><strong>' + m$(sum.totalCurrent) + '</strong></div>' +
-      '<div class="split"><span>Paid so far</span><strong>' + m$(sum.totalPaidDown) + '</strong></div>' +
-      bar(sum.percent, "Overall: " + sum.percent + " percent paid", "") + '<p class="small muted" style="margin:0">' + sum.percent + '% paid across ' + plural(sum.count, "debt") + '.</p></div>';
-    h += '<h3>Your debts</h3>';
-    state.debts.forEach(function (d) { h += debtCard(d, false); });
-    $("home").innerHTML = h;
+    h += '<dl class="tiles">' + tile("Left to pay", m0$(sum.totalCurrent), "t-teal", "") + tile("Paid so far", m0$(sum.totalPaidDown), "t-sage", sum.percent + "% of the total") + "</dl>";
+    h += sampleBanner();
+    if (P) {
+      var next = P.active[plan.order[0]], nextM = plan.payoffMonth[plan.order[0]], after = plan.order[1] !== undefined ? P.active[plan.order[1]] : null;
+      var rows = PL.thisMonth(P.active, plan.order, state.extra), total = 0;
+      rows.forEach(function (r) { total += r.total; });
+      var nd = findDebt(next.id), npct = PP.percentPaid(nd.startBalance, nd.balance);
+      h += '<div class="two-up"><div class="card c-butter"><p class="eyebrow">Next debt to pay off</p><h3 style="margin-bottom:.1em">' + esc(next.name) + '</h3>' +
+        '<p style="margin:0">' + m$(next.balance) + (nextM ? ", gone by " + esc(monthLabel(nextM)) : "") + '.</p>' +
+        '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + npct + '" aria-label="' + esc(next.name + ": " + npct + " percent paid") + '"><span style="width:' + npct + '%"></span></div>' +
+        (after ? '<p class="small muted" style="margin:0">After that: ' + esc(after.name) + '.</p>' : '<p class="small muted" style="margin:0">This is the last one in the plan.</p>') + '</div>' +
+        '<div class="card c-sky"><p class="eyebrow">This month</p><p class="big-num">' + m$(total) + '</p><ul class="list-plain small">' +
+        rows.slice(0, 4).map(function (r) { return '<li class="split"><span>' + esc(r.name) + (r.firstFocus ? ' <span class="tag terra">Focus</span>' : "") + '</span><span class="amt">' + money.format(r.total) + "</span></li>"; }).join("") +
+        (rows.length > 4 ? '<li class="small muted">and ' + (rows.length - 4) + ' more on the Plan tab</li>' : "") + "</ul></div></div>";
+    }
+    h += '<div class="card c-lilac"><h3>Recent activity</h3><ul class="list-plain act">' + recentActivity() + "</ul></div>";
+    if (P) {
+      var C = PL.compareMethods(P.active, state.extra, P.cfg);
+      function mini(label, s, key) {
+        return '<div class="mini' + (state.method === key ? " on" : "") + '"><p class="eyebrow" style="margin:0">' + label + (state.method === key ? " (yours)" : "") + '</p>' +
+          (s.paidOff ? '<p class="mini-big">' + esc(monthLabel(s.months, monthShort)) + '</p><p class="small muted" style="margin:0">' + money0.format(s.totalInterest) + " interest</p>" : '<p class="mini-big">n/a</p>') + "</div>";
+      }
+      h += '<div class="card"><h3>Snowball or Avalanche</h3><div class="mini-row">' + mini("Snowball", C.snowball, "snowball") + mini("Avalanche", C.avalanche, "avalanche") + '</div>' +
+        '<p style="margin:10px 0 0">' + (C.better === "same" ? "For these debts the two come out the same." : C.better ? esc(C.better === "avalanche" ? "Avalanche" : "Snowball") + " is " + money0.format(C.interestSaved) + " lower in interest." : "") + ' <strong>Either path works.</strong> <a href="#plan">See the full comparison</a></p></div>';
+      if (plan.paidOff) {
+        var S = PL.chartSeries(P.active, P.cfg, state.extra, plan.months);
+        h += '<div class="card"><h3>Where the plan takes you</h3>' + sparkSVG(S.plan.map(function (p) { return { x: p.m, y: p.b }; }), S.startBalance, "#2F7A72", "Projected total balance falls from " + money0.format(S.startBalance) + " to $0 by " + monthLabel(plan.months) + ".") +
+          '<div class="split small muted"><span>Now ' + money0.format(S.startBalance) + '</span><span>' + esc(monthLabel(plan.months, monthShort)) + ' $0</span></div>';
+        var lt = loggedTrend();
+        if (lt) {
+          h += '<h4 style="margin-top:14px">What you have logged</h4>' + sparkSVG(lt, Math.max.apply(null, lt.map(function (p) { return p.y; })), "#C8664B", "Your logged total balance went from " + money0.format(lt[0].y) + " to " + money0.format(lt[lt.length - 1].y) + ".") +
+            '<div class="split small muted"><span>' + esc(dayLabel(lt[0].date)) + " " + money0.format(lt[0].y) + '</span><span>' + esc(dayLabel(lt[lt.length - 1].date)) + " " + money0.format(lt[lt.length - 1].y) + '</span></div>';
+        }
+        h += '</div>';
+      }
+    }
+    h += '<div class="card c-sage"><h3>Your data</h3><p style="margin:0 0 6px">' + (saveOK ? "<strong>Saved on this device only.</strong> Nothing is sent anywhere." : "<strong>Not saving right now.</strong> Back up before you leave.") + '</p>' +
+      '<p class="small muted" style="margin:0 0 8px">' + (state.lastBackup ? "Last backup: " + esc(dayLabel(PP.todayISO(new Date(state.lastBackup)))) + "." : "Last backup: never.") + ' ' +
+      (persistState === "granted" ? "Your browser has agreed to keep this data." : "Keep a backup file somewhere you trust.") + '</p>' +
+      '<button type="button" class="btn btn-small btn-ghost" data-act="export-json">Back up now</button></div>';
+    return h + safariLine();
+  }
+
+  function renderDashboard() {
+    var sum = PP.summary(state.debts), P = planFor(state), h = switchHTML();
+    if (!state.debts.length) h += emptyDash();
+    else h += (dashVer === "a" ? dashA(P, sum) : dashB(P, sum)) + (dashVer === "a" ? backupLine() + safariLine() : "");
+    $("dash").innerHTML = h;
+    var tab = document.querySelector('.tabbar a[data-tab="dashboard"]'); if (tab) tab.setAttribute("href", "#dashboard-" + dashVer);
   }
 
   function renderDebts() {
@@ -379,7 +571,7 @@
 
   function renderAll() {
     var ae = document.activeElement, id = ae && ae.id;
-    renderPill(); renderHome(); renderDebts(); renderPlan(); renderMore();
+    renderPill(); renderDashboard(); renderDebts(); renderPlan(); renderMore();
     if (id) { var el = $(id); if (el && el !== document.activeElement && !el.disabled) el.focus({ preventScroll: true }); }
   }
 
@@ -442,7 +634,7 @@
       else { state.debts.push(r.debt); state.onboarded = true; }
     }, editingId ? "Saved." : "Debt added.", !!editingId);
     if (wasEmpty) askPersist();
-    var card = $("debt-" + id); if (card && currentTab !== "home") card.focus();
+    var card = $("debt-" + id); if (card && currentTab !== "dashboard") card.focus();
   });
 
   var logDebtId = null;
@@ -610,7 +802,7 @@
       deferredPrompt.userChoice.then(function () { deferredPrompt = null; renderMore(); });
     } else if (act === "clear") {
       confirmDlg("Clear all data?", "This deletes every debt, payment record and setting stored on this device. If you have not made a backup, it cannot be brought back.", "Clear all data", function () {
-        PS.clearAll(ls); state = PS.emptyState(); state.onboarded = true; loadStatus = "empty"; save(); renderAll(); go("home");
+        PS.clearAll(ls); state = PS.emptyState(); state.onboarded = true; loadStatus = "empty"; save(); renderAll(); go("dashboard");
         toast("All data cleared from this device.");
       });
     }
@@ -623,7 +815,7 @@
     if (e.target.id !== "extra") return;
     var raw = e.target.value.trim(), v = raw === "" ? 0 : PP.parseNumber(raw);
     if (!(isFinite(v) && v >= 0 && v <= 1e7)) { setErr("extra", "Enter an amount of $0 or more."); return; }
-    setErr("extra", ""); state.extra = PP.round2(v); save(); renderPlanResults(); renderHome();
+    setErr("extra", ""); state.extra = PP.round2(v); save(); renderPlanResults(); renderDashboard();
   });
   document.addEventListener("change", function (e) {
     if (e.target.name === "method") { state.method = e.target.value; save(); renderAll(); }
@@ -647,7 +839,7 @@
     $("onboarding").hidden = true;
     document.getElementById("main").removeAttribute("aria-hidden");
     document.querySelector(".tabbar").removeAttribute("aria-hidden");
-    askPersist(); renderAll(); go("home"); window.scrollTo(0, 0);
+    askPersist(); renderAll(); go("dashboard"); window.scrollTo(0, 0);
   }
   function renderOnb() {
     var h = onbSteps();
